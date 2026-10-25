@@ -1,0 +1,123 @@
+
+$ ls Downloads
+IMG_20261019_181233.jpg
+New Text Document.txt
+Screenshot 2026-10-21 at 23.14.07.png
+archive.zip
+code_1.90.2-1718751586_amd64.deb
+data.json
+download (7).pdf
+export.csv
+notes_final_FINAL(2).md
+page.html
+scan0001.pdf
+untitled.py
+
+$ sloth-tidy Downloads
+  [ext] IMG_20261019_181233.jpg                ->  Images/IMG_20261019_181233.jpg   (0.0s)
+  [ai ] New Text Document.txt                  ->  Notes/groceries-library-book-friday.txt   (10.0s)
+  [ext] Screenshot 2026-10-21 at 23.14.07.png  ->  Images/Screenshot 2026-10-21 at 23.14.07.png   (0.0s)
+  [ext] archive.zip                            ->  Archives/archive.zip   (0.0s)
+  [ext] code_1.90.2-1718751586_amd64.deb       ->  Installers/code_1.90.2-1718751586_amd64.deb   (0.0s)
+  [ai ] data.json                              ->  Data/picoctf-data.json   (2.8s)
+  [ai ] download (7).pdf                       ->  Receipts/hetzner-online-billing-september-2026.pdf   (3.0s)
+  [ai ] export.csv                             ->  Receipts/swiggy-airtel-uber-transactions.csv   (2.6s)
+  [ai ] notes_final_FINAL(2).md                ->  Notes/gsoc-proposal-ideas-fuzzing-harness-parser.md   (3.2s)
+  [ai ] page.html                              ->  Documents/ollama-api-docs.html   (2.1s)
+  [ai ] scan0001.pdf                           ->  Documents/scan0001-public-key-cryptography-cs342.pdf   (2.9s)
+  [ai ] untitled.py                            ->  Code/tcp-port-scanner-homelab.py   (2.5s)
+
+12 file(s) planned with gemma3:4b in 29.0s.
+Dry run: nothing moved. Add --apply when you like the plan.
+
+$ sloth-tidy Downloads --apply
+Using the plan from your last dry run (no files changed since).
+  [ext] IMG_20261019_181233.jpg                ->  Images/IMG_20261019_181233.jpg   (0.0s)
+  [ai ] New Text Document.txt                  ->  Notes/groceries-library-book-friday.txt   (0.0s)
+  [ext] Screenshot 2026-10-21 at 23.14.07.png  ->  Images/Screenshot 2026-10-21 at 23.14.07.png   (0.0s)
+  [ext] archive.zip                            ->  Archives/archive.zip   (0.0s)
+  [ext] code_1.90.2-1718751586_amd64.deb       ->  Installers/code_1.90.2-1718751586_amd64.deb   (0.0s)
+  [ai ] data.json                              ->  Data/picoctf-data.json   (0.0s)
+  [ai ] download (7).pdf                       ->  Receipts/hetzner-online-billing-september-2026.pdf   (0.0s)
+  [ai ] export.csv                             ->  Receipts/swiggy-airtel-uber-transactions.csv   (0.0s)
+  [ai ] notes_final_FINAL(2).md                ->  Notes/gsoc-proposal-ideas-fuzzing-harness-parser.md   (0.0s)
+  [ai ] page.html                              ->  Documents/ollama-api-docs.html   (0.0s)
+  [ai ] scan0001.pdf                           ->  Documents/scan0001-public-key-cryptography-cs342.pdf   (0.0s)
+  [ai ] untitled.py                            ->  Code/tcp-port-scanner-homelab.py   (0.0s)
+
+12 file(s) planned with gemma3:4b in 0.0s.
+Moved. Undo log: .sloth-tidy/undo-20261025-122904-731244.json
+
+$ find Downloads -type f -not -path */.sloth-tidy/*
+Downloads/Archives/archive.zip
+Downloads/Code/tcp-port-scanner-homelab.py
+Downloads/Data/picoctf-data.json
+Downloads/Documents/ollama-api-docs.html
+Downloads/Documents/scan0001-public-key-cryptography-cs342.pdf
+Downloads/Images/IMG_20261019_181233.jpg
+Downloads/Images/Screenshot 2026-10-21 at 23.14.07.png
+Downloads/Installers/code_1.90.2-1718751586_amd64.deb
+Downloads/Notes/groceries-library-book-friday.txt
+Downloads/Notes/gsoc-proposal-ideas-fuzzing-harness-parser.md
+Downloads/Receipts/hetzner-online-billing-september-2026.pdf
+Downloads/Receipts/swiggy-airtel-uber-transactions.csv
+
+$ sloth-tidy undo Downloads
+Restored 12 file(s) from undo-20261025-122904-731244.json
+
+$ ls Downloads
+IMG_20261019_181233.jpg
+New Text Document.txt
+Screenshot 2026-10-21 at 23.14.07.png
+archive.zip
+code_1.90.2-1718751586_amd64.deb
+data.json
+download (7).pdf
+export.csv
+notes_final_FINAL(2).md
+page.html
+scan0001.pdf
+untitled.py
+
+# what happens when the model isn't running
+
+$ sloth-tidy Downloads --host http://127.0.0.1:9
+! model 'gemma3:4b' not reachable at http://127.0.0.1:9; falling back to extension rules
+  [ext] IMG_20261019_181233.jpg                ->  Images/IMG_20261019_181233.jpg   (0.0s)
+  [ext] New Text Document.txt                  ->  Notes/New Text Document.txt   (0.0s)
+  [ext] Screenshot 2026-10-21 at 23.14.07.png  ->  Images/Screenshot 2026-10-21 at 23.14.07.png   (0.0s)
+  [ext] archive.zip                            ->  Archives/archive.zip   (0.0s)
+  [ext] code_1.90.2-1718751586_amd64.deb       ->  Installers/code_1.90.2-1718751586_amd64.deb   (0.0s)
+  [ext] data.json                              ->  Data/data.json   (0.0s)
+  [ext] download (7).pdf                       ->  Documents/download (7).pdf   (0.0s)
+  [ext] export.csv                             ->  Data/export.csv   (0.0s)
+  [ext] notes_final_FINAL(2).md                ->  Notes/notes_final_FINAL(2).md   (0.0s)
+  [ext] page.html                              ->  Documents/page.html   (0.0s)
+  [ext] scan0001.pdf                           ->  Documents/scan0001.pdf   (0.0s)
+  [ext] untitled.py                            ->  Code/untitled.py   (0.0s)
+
+12 file(s) planned with extension rules in 0.0s.
+Dry run: nothing moved. Add --apply when you like the plan.
+
+# and when someone points it at a remote server
+
+$ sloth-tidy Downloads --host http://8.8.8.8:11434
+usage: sloth-tidy [-h] [--apply] [--model MODEL] [--host HOST] [--no-model]
+                  [--watch] [--every EVERY] [--min-age MIN_AGE] [--version]
+                  folder
+sloth-tidy: error: 8.8.8.8 resolves to 8.8.8.8, which is not localhost. sloth-tidy only talks to a model on this machine.
+
+# watch mode: a file lands, sits still for a bit, then gets tidied
+$ sloth-tidy Inbox --watch --apply --every 5 --min-age 8   (stopped after 25s)
+Watching /tmp/tmp.LpZzu6OBkd/Inbox every 5s; files must sit still for 8s. Ctrl+C to stop.
+[demo] dropped Inbox/mail-attachment.txt at 12:29:06
+[12:29:14] woke up, found something
+  [ai ] mail-attachment.txt  ->  Receipts/order-confirmation-keyboard.txt   (2.2s)
+
+1 file(s) planned with gemma3:4b in 2.2s.
+Moved. Undo log: .sloth-tidy/undo-20261025-122917-096992.json
+
+Back to sleep.
+
+$ find Inbox -type f -not -path */.sloth-tidy/*
+Inbox/Receipts/order-confirmation-keyboard.txt

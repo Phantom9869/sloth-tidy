@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sloth-tidy"
+version = "0.1.0"
+description = "Lazy, local-first folder tidier powered by an open-weight model via Ollama"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+sloth-tidy = "sloth_tidy.cli:main"
+
+[tool.setuptools]
+packages = ["sloth_tidy"]

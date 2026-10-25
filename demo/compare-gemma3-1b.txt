@@ -1,0 +1,16 @@
+$ sloth-tidy Downloads --model gemma3:1b
+  [ext] IMG_20261019_181233.jpg                ->  Images/IMG_20261019_181233.jpg   (0.0s)
+  [ai ] New Text Document.txt                  ->  Notes/grocery-list-oats-bananas-peanut-butter.txt   (3.6s)
+  [ext] Screenshot 2026-10-21 at 23.14.07.png  ->  Images/Screenshot 2026-10-21 at 23.14.07.png   (0.0s)
+  [ext] archive.zip                            ->  Archives/archive.zip   (0.0s)
+  [ext] code_1.90.2-1718751586_amd64.deb       ->  Installers/code_1.90.2-1718751586_amd64.deb   (0.0s)
+  [ai ] data.json                              ->  Data/transaction-log-server-access-verification.json   (1.3s)
+  [ai ] download (7).pdf                       ->  Documents/invoice-receipt-hetzner-online-gmbh.pdf   (1.3s)
+  [ext] export.csv                             ->  Data/export.csv   (3.7s)
+  [ai ] notes_final_FINAL(2).md                ->  Notes/gsoc-proposal-ideas-fuzzing-harness-for.md   (1.3s)
+  [ai ] page.html                              ->  Documents/ollama-api-docs-generate-a-chat.html   (1.1s)
+  [ai ] scan0001.pdf                           ->  Documents/lecture-7-public-key-cryptography-cs.pdf   (1.5s)
+  [ai ] untitled.py                            ->  Code/python-script-analyzer-tool-basic-analysis.py   (1.3s)
+
+12 file(s) planned with gemma3:1b in 15.0s.
+Dry run: nothing moved. Add --apply when you like the plan.
