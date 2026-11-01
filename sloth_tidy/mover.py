@@ -20,10 +20,15 @@ def apply(root: Path, moves: list[Move]) -> Path | None:
         return None
     done: list[dict] = []
     for mv in moves:
-        mv.dst.parent.mkdir(parents=True, exist_ok=True)
+        if not mv.src.is_file():  # deleted or moved away since planning; nothing to do
+            continue
         if mv.dst.exists():  # something appeared since planning; skip instead of clobbering
             continue
-        os.rename(mv.src, mv.dst)  # same filesystem, so this is atomic
+        mv.dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.rename(mv.src, mv.dst)  # same filesystem, so this is atomic
+        except OSError:
+            continue  # keep going, so the moves already made still get an undo log
         done.append({"from": str(mv.src.relative_to(root)), "to": str(mv.dst.relative_to(root))})
     if not done:
         return None

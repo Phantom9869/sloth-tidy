@@ -38,7 +38,8 @@ Real output from `demo/demo-output.txt` (Gemma 3 4B on CPU through Ollama).
 - **Undo.** Every applied run writes `.sloth-tidy/undo-*.json`; `sloth-tidy undo DIR`
   puts everything back and removes category folders it emptied.
 - **Never overwrites.** Name collisions become `name-2.ext`, `name-3.ext`. If a destination
-  appears between planning and moving, that file is skipped.
+  appears between planning and moving, that file is skipped. So is a file you deleted or
+  moved in the meantime; everything else still moves and still gets an undo log.
 - **Localhost only.** The Ollama URL must resolve to a loopback address, otherwise the
   CLI refuses to start. File contents never leave the machine.
 - **Doesn't guess blind.** Files it can't read (images, archives, installers) are sorted by

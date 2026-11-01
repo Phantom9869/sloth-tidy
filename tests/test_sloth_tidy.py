@@ -118,6 +118,20 @@ def test_apply_skips_if_destination_appears_after_planning(tmp_path):
     assert (tmp_path / "Notes" / "x.txt").read_text() == "someone else's"
 
 
+def test_apply_skips_files_deleted_after_planning_and_keeps_undo_log(tmp_path):
+    for n in ("a", "b", "c"):
+        (tmp_path / f"{n}.txt").write_text(n)
+    moves = build_plan(tmp_path, FakeBrain({"a.txt": ("Notes", "a"), "b.txt": ("Notes", "b"),
+                                            "c.txt": ("Notes", "c")}))
+    (tmp_path / "b.txt").unlink()  # user deletes a file while the model is still thinking
+    log = apply(tmp_path, moves)
+    assert log is not None
+    assert [m["from"] for m in json.loads(log.read_text())["moves"]] == ["a.txt", "c.txt"]
+    restored, skipped, _ = undo(tmp_path)
+    assert (restored, skipped) == (2, 0)
+    assert (tmp_path / "a.txt").exists() and (tmp_path / "c.txt").exists()
+
+
 def test_undo_skips_files_moved_again(messy):
     moves = build_plan(messy, FakeBrain({"untitled.py": ("Code", "scanner")}))
     apply(messy, moves)
