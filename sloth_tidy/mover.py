@@ -82,14 +82,15 @@ def _fingerprint(path: Path) -> list:
 def save_plan(root: Path, moves: list[Move], model: str) -> Path:
     ld = log_dir(root)
     ld.mkdir(exist_ok=True)
-    data = {
-        "model": model,
-        "moves": [
-            {"from": str(m.src.relative_to(root)), "to": str(m.dst.relative_to(root)),
-             "source": m.source, "seconds": m.seconds, "fp": _fingerprint(m.src)}
-            for m in moves
-        ],
-    }
+    entries = []
+    for m in moves:
+        try:
+            fp = _fingerprint(m.src)
+        except FileNotFoundError:
+            continue  # deleted or moved away while the model was still thinking
+        entries.append({"from": str(m.src.relative_to(root)), "to": str(m.dst.relative_to(root)),
+                        "source": m.source, "seconds": m.seconds, "fp": fp})
+    data = {"model": model, "moves": entries}
     path = ld / "plan.json"
     path.write_text(json.dumps(data, indent=2))
     return path

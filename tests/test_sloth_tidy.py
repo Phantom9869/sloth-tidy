@@ -226,3 +226,26 @@ def test_stale_plan_is_ignored_when_file_changes(tmp_path, monkeypatch):
     cli.main([str(tmp_path), "--apply"])
     assert CountingBrain.calls == 2
     assert (tmp_path / "Notes" / "take-2.txt").exists()
+
+
+class VanishingBrain(CountingBrain):
+    """Deletes a.txt while 'thinking' about b.txt, like a user cleaning up mid-run."""
+
+    def suggest(self, info):
+        if info.path.name == "b.txt":
+            (info.path.parent / "a.txt").unlink()
+        return super().suggest(info)
+
+
+def test_dry_run_survives_file_deleted_while_planning(tmp_path, monkeypatch, capsys):
+    from sloth_tidy import cli
+    (tmp_path / "a.txt").write_text("first")
+    (tmp_path / "b.txt").write_text("second")
+    CountingBrain.calls = 0
+    monkeypatch.setattr(cli, "pick_brain", lambda args: VanishingBrain({}))
+    cli.main([str(tmp_path)])                 # used to crash with FileNotFoundError
+    assert "Dry run: nothing moved" in capsys.readouterr().out
+    monkeypatch.setattr(cli, "pick_brain", lambda args: CountingBrain({}))
+    cli.main([str(tmp_path), "--apply"])      # the saved plan still matches the folder
+    assert CountingBrain.calls == 2           # so apply reused it instead of re-asking
+    assert (tmp_path / "Notes" / "take-2.txt").read_text() == "second"
