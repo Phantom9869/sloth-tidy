@@ -91,7 +91,10 @@ def scan(folder: Path, min_age: float = 0.0, now: float | None = None) -> list[F
     for entry in sorted(folder.iterdir()):
         if entry.name == STATE_DIR or not is_candidate(entry):
             continue
-        st = entry.stat()
+        try:
+            st = entry.stat()
+        except FileNotFoundError:
+            continue  # gone since listing, e.g. a download renamed on completion
         if now - st.st_mtime < min_age:
             continue  # still "fresh"; the sloth waits
         found.append(FileInfo(entry, st.st_size, st.st_mtime, snippet_for(entry)))

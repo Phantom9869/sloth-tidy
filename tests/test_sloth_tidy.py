@@ -249,3 +249,22 @@ def test_dry_run_survives_file_deleted_while_planning(tmp_path, monkeypatch, cap
     cli.main([str(tmp_path), "--apply"])      # the saved plan still matches the folder
     assert CountingBrain.calls == 2           # so apply reused it instead of re-asking
     assert (tmp_path / "Notes" / "take-2.txt").read_text() == "second"
+
+
+def test_scan_skips_file_that_vanishes_mid_scan(tmp_path, monkeypatch):
+    # A browser finishing a download renames its partial file between listing and stat.
+    from sloth_tidy import scanner
+    (tmp_path / "keep.txt").write_text("hello")
+    gone = tmp_path / "gone.txt"
+    gone.write_text("bye")
+    real = scanner.is_candidate
+
+    def vanish_after_check(p):
+        ok = real(p)
+        if p == gone:
+            p.unlink()
+        return ok
+
+    monkeypatch.setattr(scanner, "is_candidate", vanish_after_check)
+    found = scanner.scan(tmp_path)
+    assert [f.path.name for f in found] == ["keep.txt"]
