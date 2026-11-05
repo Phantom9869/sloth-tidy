@@ -108,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--host", default="http://127.0.0.1:11434", help="Ollama URL, must be localhost")
     p.add_argument("--no-model", action="store_true", help="skip the model, use extension rules")
     p.add_argument("--watch", action="store_true", help="keep running and tidy in the background")
-    p.add_argument("--every", type=float, default=300, help="watch: seconds between naps (300)")
+    p.add_argument("--every", type=float, default=300, help="watch: seconds between naps (default 300, must be > 0)")
     p.add_argument("--min-age", type=float, default=None,
                    help="only touch files untouched for this many seconds "
                         "(default 0, or 600 in watch mode)")
@@ -118,6 +118,10 @@ def main(argv: list[str] | None = None) -> int:
     root = a.folder.expanduser().resolve()
     if not root.is_dir():
         p.error(f"{root} is not a folder")
+    if a.every <= 0:
+        p.error("--every must be greater than 0")
+    if a.min_age is not None and a.min_age < 0:
+        p.error("--min-age cannot be negative")
     try:
         brain = pick_brain(a)
     except LocalOnlyError as exc:

@@ -315,3 +315,16 @@ def test_undo_cli_reports_corrupt_log(tmp_path, capsys):
     (state / "undo-20260101-000000-000004.json").write_text("{")
     assert main(["undo", str(tmp_path)]) == 1
     assert "Can't undo" in capsys.readouterr().out
+
+
+def test_cli_rejects_non_positive_every(tmp_path):
+    # --every 0 would busy-loop; a negative value makes time.sleep raise.
+    with pytest.raises(SystemExit):
+        main([str(tmp_path), "--watch", "--every", "0", "--no-model"])
+    with pytest.raises(SystemExit):
+        main([str(tmp_path), "--watch", "--every", "-1", "--no-model"])
+
+
+def test_cli_rejects_negative_min_age(tmp_path):
+    with pytest.raises(SystemExit):
+        main([str(tmp_path), "--min-age", "-5", "--no-model"])
