@@ -9,7 +9,7 @@ from sloth_tidy import brain as brain_mod
 from sloth_tidy.brain import (HeuristicBrain, LocalOnlyError, OllamaBrain, Suggestion,
                               ensure_local, parse_answer)
 from sloth_tidy.cli import build_plan, main
-from sloth_tidy.mover import apply, undo
+from sloth_tidy.mover import UndoError, apply, undo
 from sloth_tidy.planner import slugify, target_for
 from sloth_tidy.scanner import FileInfo, scan
 
@@ -268,3 +268,50 @@ def test_scan_skips_file_that_vanishes_mid_scan(tmp_path, monkeypatch):
     monkeypatch.setattr(scanner, "is_candidate", vanish_after_check)
     found = scanner.scan(tmp_path)
     assert [f.path.name for f in found] == ["keep.txt"]
+
+
+def test_undo_refuses_corrupt_log(tmp_path):
+    # A half-written or hand-edited undo log used to raise JSONDecodeError.
+    state = tmp_path / ".sloth-tidy"
+    state.mkdir()
+    bad = state / "undo-20260101-000000-000001.json"
+    bad.write_text("not json at all{{{")
+    with pytest.raises(UndoError, match="unreadable"):
+        undo(tmp_path)
+    assert bad.is_file()  # left in place so it can be inspected
+
+
+def test_undo_refuses_log_missing_moves(tmp_path):
+    state = tmp_path / ".sloth-tidy"
+    state.mkdir()
+    bad = state / "undo-20260101-000000-000002.json"
+    bad.write_text(json.dumps({"created": 1}))  # no "moves" key
+    with pytest.raises(UndoError, match="unreadable"):
+        undo(tmp_path)
+    assert bad.is_file()
+
+
+def test_undo_refuses_path_escaping_log(tmp_path):
+    # A tampered log with ../ must not rename files onto the parent directory.
+    (tmp_path / "Notes").mkdir()
+    (tmp_path / "Notes" / "x.txt").write_text("inside")
+    state = tmp_path / ".sloth-tidy"
+    state.mkdir()
+    bad = state / "undo-20260101-000000-000003.json"
+    bad.write_text(json.dumps({
+        "created": 1,
+        "moves": [{"from": "../escape-out.txt", "to": "Notes/x.txt"}],
+    }))
+    with pytest.raises(UndoError, match="outside"):
+        undo(tmp_path)
+    assert (tmp_path / "Notes" / "x.txt").read_text() == "inside"
+    assert not (tmp_path.parent / "escape-out.txt").exists()
+    assert bad.is_file()
+
+
+def test_undo_cli_reports_corrupt_log(tmp_path, capsys):
+    state = tmp_path / ".sloth-tidy"
+    state.mkdir()
+    (state / "undo-20260101-000000-000004.json").write_text("{")
+    assert main(["undo", str(tmp_path)]) == 1
+    assert "Can't undo" in capsys.readouterr().out

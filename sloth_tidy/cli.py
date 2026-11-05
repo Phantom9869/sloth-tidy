@@ -15,7 +15,7 @@ from pathlib import Path
 
 from . import __version__
 from .brain import HeuristicBrain, LocalOnlyError, OllamaBrain
-from .mover import apply, forget_plan, load_plan, save_plan, undo
+from .mover import UndoError, apply, forget_plan, load_plan, save_plan, undo
 from .planner import Move, target_for
 from .scanner import scan
 
@@ -89,7 +89,11 @@ def main(argv: list[str] | None = None) -> int:
         p = argparse.ArgumentParser(prog="sloth-tidy undo")
         p.add_argument("folder", type=Path)
         a = p.parse_args(argv[1:])
-        restored, skipped, log = undo(a.folder.resolve())
+        try:
+            restored, skipped, log = undo(a.folder.resolve())
+        except UndoError as exc:
+            print(f"Can't undo: {exc}")
+            return 1
         if log is None:
             print("No undo log found. Nothing to put back.")
             return 1

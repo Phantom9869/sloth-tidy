@@ -47,16 +47,49 @@ def latest_log(root: Path) -> Path | None:
     return logs[-1] if logs else None
 
 
+class UndoError(ValueError):
+    """The undo log is damaged or tries to touch files outside the folder."""
+
+
+def _under(root: Path, path: Path) -> bool:
+    """True if path resolves to something inside root (or root itself)."""
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 def undo(root: Path) -> tuple[int, int, Path | None]:
-    """Reverse the most recent run. Returns (restored, skipped, log_path)."""
+    """Reverse the most recent run. Returns (restored, skipped, log_path).
+
+    Raises UndoError if the log is unreadable or any entry points outside root;
+    the log file is left in place so it can be inspected.
+    """
     log = latest_log(root)
     if log is None:
         return 0, 0, None
-    data = json.loads(log.read_text())
+    try:
+        data = json.loads(log.read_text())
+        entries = data["moves"]
+        if not isinstance(entries, list):
+            raise TypeError("moves must be a list")
+    except (ValueError, KeyError, TypeError, OSError) as exc:
+        raise UndoError(f"undo log is unreadable: {log.name}") from exc
+
+    # Refuse the whole log if any entry would escape the folder (a tampered log
+    # must not rename files onto the parent directory, /etc, ...).
+    planned: list[tuple[Path, Path]] = []
+    for entry in entries:
+        if not isinstance(entry, dict) or "from" not in entry or "to" not in entry:
+            raise UndoError(f"undo log is malformed: {log.name}")
+        src, dst = root / entry["from"], root / entry["to"]
+        if not _under(root, src) or not _under(root, dst):
+            raise UndoError(f"undo log points outside the folder: {log.name}")
+        planned.append((src, dst))
+
     restored = skipped = 0
-    for entry in reversed(data["moves"]):
-        src = root / entry["from"]
-        dst = root / entry["to"]
+    for src, dst in reversed(planned):
         if dst.exists() and not src.exists():
             os.rename(dst, src)
             restored += 1

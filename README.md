@@ -36,7 +36,8 @@ Real output from `demo/demo-output.txt` (Gemma 3 4B on CPU through Ollama).
 - **Dry run by default.** Without `--apply` nothing moves. The dry run's plan is saved,
   and `--apply` reuses it if no file changed, so the plan you read is the plan that runs.
 - **Undo.** Every applied run writes `.sloth-tidy/undo-*.json`; `sloth-tidy undo DIR`
-  puts everything back and removes category folders it emptied.
+  puts everything back and removes category folders it emptied. A damaged or
+  path-escaping undo log is refused instead of crashing or writing outside the folder.
 - **Never overwrites.** Name collisions become `name-2.ext`, `name-3.ext`. If a destination
   appears between planning and moving, that file is skipped. So is a file you deleted or
   moved in the meantime; everything else still moves and still gets an undo log.
