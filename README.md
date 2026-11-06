@@ -40,7 +40,8 @@ Real output from `demo/demo-output.txt` (Gemma 3 4B on CPU through Ollama).
   path-escaping undo log is refused instead of crashing or writing outside the folder.
 - **Never overwrites.** Name collisions become `name-2.ext`, `name-3.ext`. If a destination
   appears between planning and moving, that file is skipped. So is a file you deleted or
-  moved in the meantime; everything else still moves and still gets an undo log.
+  moved in the meantime. If a category folder can't be created because that name is already
+  a file, that one move is skipped too; everything else still moves and still gets an undo log.
 - **Localhost only.** The Ollama URL must resolve to a loopback address, otherwise the
   CLI refuses to start. File contents never leave the machine.
 - **Doesn't guess blind.** Files it can't read (images, archives, installers) are sorted by

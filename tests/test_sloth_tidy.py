@@ -10,7 +10,7 @@ from sloth_tidy.brain import (HeuristicBrain, LocalOnlyError, OllamaBrain, Sugge
                               ensure_local, parse_answer)
 from sloth_tidy.cli import build_plan, main
 from sloth_tidy.mover import UndoError, apply, undo
-from sloth_tidy.planner import slugify, target_for
+from sloth_tidy.planner import Move, slugify, target_for
 from sloth_tidy.scanner import FileInfo, scan
 
 
@@ -116,6 +116,31 @@ def test_apply_skips_if_destination_appears_after_planning(tmp_path):
     assert apply(tmp_path, moves) is None
     assert (tmp_path / "a.txt").read_text() == "mine"
     assert (tmp_path / "Notes" / "x.txt").read_text() == "someone else's"
+
+
+def test_apply_keeps_undo_log_when_category_dir_is_blocked(tmp_path):
+    # "Images" is a file, so creating Images/ fails. That must not discard the
+    # undo log for a.txt, which was already renamed, or skip c.txt afterwards.
+    (tmp_path / "a.txt").write_text("aaa")
+    (tmp_path / "b.txt").write_text("bbb")
+    (tmp_path / "c.txt").write_text("ccc")
+    (tmp_path / "Images").write_text("not a directory")
+    moves = [
+        Move(tmp_path / "a.txt", tmp_path / "Notes" / "a.txt", "fallback"),
+        Move(tmp_path / "b.txt", tmp_path / "Images" / "b.txt", "fallback"),
+        Move(tmp_path / "c.txt", tmp_path / "Code" / "c.txt", "fallback"),
+    ]
+    log = apply(tmp_path, moves)
+    assert log is not None
+    assert [m["from"] for m in json.loads(log.read_text())["moves"]] == ["a.txt", "c.txt"]
+    assert (tmp_path / "Notes" / "a.txt").read_text() == "aaa"
+    assert (tmp_path / "Code" / "c.txt").read_text() == "ccc"
+    assert (tmp_path / "b.txt").read_text() == "bbb"
+    assert (tmp_path / "Images").is_file() and (tmp_path / "Images").read_text() == "not a directory"
+    restored, skipped, _ = undo(tmp_path)
+    assert (restored, skipped) == (2, 0)
+    assert (tmp_path / "a.txt").read_text() == "aaa"
+    assert (tmp_path / "c.txt").read_text() == "ccc"
 
 
 def test_apply_skips_files_deleted_after_planning_and_keeps_undo_log(tmp_path):

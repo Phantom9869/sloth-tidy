@@ -24,8 +24,10 @@ def apply(root: Path, moves: list[Move]) -> Path | None:
             continue
         if mv.dst.exists():  # something appeared since planning; skip instead of clobbering
             continue
-        mv.dst.parent.mkdir(parents=True, exist_ok=True)
         try:
+            # mkdir is in here too: if the category name is already a file,
+            # FileExistsError must not abandon moves that already succeeded.
+            mv.dst.parent.mkdir(parents=True, exist_ok=True)
             os.rename(mv.src, mv.dst)  # same filesystem, so this is atomic
         except OSError:
             continue  # keep going, so the moves already made still get an undo log
