@@ -10,7 +10,7 @@ from sloth_tidy.brain import (HeuristicBrain, LocalOnlyError, OllamaBrain, Sugge
                               ensure_local, parse_answer)
 from sloth_tidy.cli import build_plan, main
 from sloth_tidy.mover import UndoError, apply, undo
-from sloth_tidy.planner import slugify, target_for
+from sloth_tidy.planner import Move, slugify, target_for
 from sloth_tidy.scanner import FileInfo, scan
 
 
@@ -116,6 +116,31 @@ def test_apply_skips_if_destination_appears_after_planning(tmp_path):
     assert apply(tmp_path, moves) is None
     assert (tmp_path / "a.txt").read_text() == "mine"
     assert (tmp_path / "Notes" / "x.txt").read_text() == "someone else's"
+
+
+def test_apply_keeps_undo_log_when_category_dir_is_blocked(tmp_path):
+    # "Images" is a file, so creating Images/ fails. That must not discard the
+    # undo log for a.txt, which was already renamed, or skip c.txt afterwards.
+    (tmp_path / "a.txt").write_text("aaa")
+    (tmp_path / "b.txt").write_text("bbb")
+    (tmp_path / "c.txt").write_text("ccc")
+    (tmp_path / "Images").write_text("not a directory")
+    moves = [
+        Move(tmp_path / "a.txt", tmp_path / "Notes" / "a.txt", "fallback"),
+        Move(tmp_path / "b.txt", tmp_path / "Images" / "b.txt", "fallback"),
+        Move(tmp_path / "c.txt", tmp_path / "Code" / "c.txt", "fallback"),
+    ]
+    log = apply(tmp_path, moves)
+    assert log is not None
+    assert [m["from"] for m in json.loads(log.read_text())["moves"]] == ["a.txt", "c.txt"]
+    assert (tmp_path / "Notes" / "a.txt").read_text() == "aaa"
+    assert (tmp_path / "Code" / "c.txt").read_text() == "ccc"
+    assert (tmp_path / "b.txt").read_text() == "bbb"
+    assert (tmp_path / "Images").is_file() and (tmp_path / "Images").read_text() == "not a directory"
+    restored, skipped, _ = undo(tmp_path)
+    assert (restored, skipped) == (2, 0)
+    assert (tmp_path / "a.txt").read_text() == "aaa"
+    assert (tmp_path / "c.txt").read_text() == "ccc"
 
 
 def test_apply_skips_files_deleted_after_planning_and_keeps_undo_log(tmp_path):
@@ -328,3 +353,124 @@ def test_cli_rejects_non_positive_every(tmp_path):
 def test_cli_rejects_negative_min_age(tmp_path):
     with pytest.raises(SystemExit):
         main([str(tmp_path), "--min-age", "-5", "--no-model"])
+
+
+def test_symlinked_category_is_not_followed(tmp_path):
+    # rename follows a directory symlink. Filing into Notes here used to drop
+    # the file outside the tidy folder, after which undo refused to bring it back.
+    outside = tmp_path.parent / f"outside-{tmp_path.name}"
+    outside.mkdir()
+    try:
+        (tmp_path / "a.txt").write_text("secret")
+        (tmp_path / "Notes").symlink_to(outside)
+        moves = build_plan(tmp_path, FakeBrain({"a.txt": ("Notes", "secret note")}))
+        assert moves[0].dst.relative_to(tmp_path) == Path("Notes-2/secret-note.txt")
+        log = apply(tmp_path, moves)
+        assert log is not None
+        assert (tmp_path / "Notes-2" / "secret-note.txt").read_text() == "secret"
+        assert list(outside.iterdir()) == []
+        assert (tmp_path / "Notes").is_symlink()
+        restored, skipped, _ = undo(tmp_path)
+        assert (restored, skipped) == (1, 0)
+        assert (tmp_path / "a.txt").read_text() == "secret"
+        assert (tmp_path / "Notes").is_symlink()
+        assert list(outside.iterdir()) == []
+    finally:
+        for child in outside.iterdir():
+            child.unlink()
+        outside.rmdir()
+
+
+def test_category_name_occupied_by_a_file_uses_a_real_directory(tmp_path):
+    (tmp_path / "a.txt").write_text("aaa")
+    (tmp_path / "Notes").write_text("leave me")
+    moves = build_plan(tmp_path, FakeBrain({"a.txt": ("Notes", "a"), "Notes": ("Misc", None)}))
+    by_src = {m.src.name: m.dst.relative_to(tmp_path) for m in moves}
+    assert by_src == {
+        "a.txt": Path("Notes-2/a.txt"),
+        "Notes": Path("Misc/Notes"),
+    }
+    apply(tmp_path, moves)
+    assert (tmp_path / "Notes-2" / "a.txt").read_text() == "aaa"
+    assert (tmp_path / "Misc" / "Notes").read_text() == "leave me"
+
+
+def test_apply_skips_moves_that_leave_the_folder(tmp_path):
+    outside = tmp_path.parent / f"outside-{tmp_path.name}"
+    outside.mkdir()
+    escaped = tmp_path.parent / f"escaped-{tmp_path.name}.txt"
+    try:
+        (tmp_path / "a.txt").write_text("secret")
+        (tmp_path / "b.txt").write_text("dotdot")
+        (tmp_path / "c.txt").write_text("ok")
+        (tmp_path / "Notes").symlink_to(outside)
+        moves = [
+            Move(tmp_path / "a.txt", tmp_path / "Notes" / "a.txt", "fallback"),
+            Move(tmp_path / "b.txt", tmp_path / ".." / escaped.name, "fallback"),
+            Move(tmp_path / "c.txt", tmp_path / "Code" / "c.txt", "fallback"),
+        ]
+        log = apply(tmp_path, moves)
+        assert log is not None
+        assert [m["from"] for m in json.loads(log.read_text())["moves"]] == ["c.txt"]
+        assert (tmp_path / "a.txt").read_text() == "secret"
+        assert (tmp_path / "b.txt").read_text() == "dotdot"
+        assert (tmp_path / "Code" / "c.txt").read_text() == "ok"
+        assert list(outside.iterdir()) == []
+        assert not escaped.exists()
+    finally:
+        for child in outside.iterdir():
+            child.unlink()
+        outside.rmdir()
+        escaped.unlink(missing_ok=True)
+
+
+def test_plan_that_points_outside_is_rebuilt(tmp_path, capsys):
+    f = tmp_path / "a.txt"
+    f.write_text("hello")
+    st = f.stat()
+    outside = tmp_path.parent / f"escaped-{tmp_path.name}.txt"
+    state = tmp_path / ".sloth-tidy"
+    state.mkdir()
+    (state / "plan.json").write_text(json.dumps({
+        "model": "extension rules",
+        "moves": [{
+            "from": "a.txt",
+            "to": f"../{outside.name}",
+            "source": "fallback",
+            "seconds": 0.0,
+            "fp": [st.st_size, st.st_mtime_ns],
+        }],
+    }))
+    assert main([str(tmp_path), "--apply", "--no-model"]) == 0
+    out = capsys.readouterr().out
+    assert "Using the plan from your last dry run" not in out
+    assert not outside.exists()
+    assert (tmp_path / "Notes" / "a.txt").read_text() == "hello"
+
+
+@pytest.mark.parametrize("payload", [
+    "[]",
+    "null",
+    '{"model": "extension rules", "moves": null}',
+    '{"model": "extension rules", "moves": ["a.txt"]}',
+])
+def test_malformed_plan_is_rebuilt(tmp_path, payload):
+    # A plan that is still valid JSON but not the shape we write used to raise
+    # AttributeError / TypeError on --apply instead of being planned again.
+    (tmp_path / "a.txt").write_text("hello")
+    state = tmp_path / ".sloth-tidy"
+    state.mkdir()
+    (state / "plan.json").write_text(payload)
+    assert main([str(tmp_path), "--apply", "--no-model"]) == 0
+    assert (tmp_path / "Notes" / "a.txt").read_text() == "hello"
+
+
+def test_undo_refuses_symlink_loop_without_crashing(tmp_path):
+    (tmp_path / "loop").symlink_to(tmp_path / "loop")
+    state = tmp_path / ".sloth-tidy"
+    state.mkdir()
+    bad = state / "undo-20260101-000000-000099.json"
+    bad.write_text(json.dumps({"moves": [{"from": "a.txt", "to": "loop/a.txt"}]}))
+    with pytest.raises(UndoError, match="outside"):
+        undo(tmp_path)
+    assert bad.is_file()

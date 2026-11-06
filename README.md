@@ -40,7 +40,12 @@ Real output from `demo/demo-output.txt` (Gemma 3 4B on CPU through Ollama).
   path-escaping undo log is refused instead of crashing or writing outside the folder.
 - **Never overwrites.** Name collisions become `name-2.ext`, `name-3.ext`. If a destination
   appears between planning and moving, that file is skipped. So is a file you deleted or
-  moved in the meantime; everything else still moves and still gets an undo log.
+  moved in the meantime. If a category folder can't be created because that name is already
+  a file, that one move is skipped too; everything else still moves and still gets an undo log.
+- **Stays inside the folder.** A category name that is a symlink or a file is not used;
+  those files go to `Notes-2`, `Images-2`, and so on. A move that would resolve outside
+  the folder is skipped. A remembered plan that is damaged or points outside is ignored
+  and planned again.
 - **Localhost only.** The Ollama URL must resolve to a loopback address, otherwise the
   CLI refuses to start. File contents never leave the machine.
 - **Doesn't guess blind.** Files it can't read (images, archives, installers) are sorted by
@@ -103,8 +108,10 @@ The model is mocked in tests, so they run in well under a second without Ollama.
    Ollama's `/api/chat` with a JSON schema in `format`, so the reply is always
    `{"category": ..., "name": ...}` with the category from a fixed list.
    Answers are validated; anything odd falls back to extension rules.
-3. `planner.py` slugifies the name (max 6 words / 60 chars) and resolves collisions.
-4. `mover.py` moves files with `os.rename` and writes the undo log.
+3. `planner.py` slugifies the name (max 6 words / 60 chars), resolves collisions, and
+   picks a real directory inside the folder when the category name is a symlink or a file.
+4. `mover.py` moves files with `os.rename` and writes the undo log. A path that would
+   leave the folder is skipped. A damaged or escaping remembered plan is ignored.
 
 ## License
 
