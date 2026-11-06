@@ -20,6 +20,10 @@ def apply(root: Path, moves: list[Move]) -> Path | None:
         return None
     done: list[dict] = []
     for mv in moves:
+        # A symlinked category, a "../" destination, or an absolute path would
+        # rename the file out of the folder. Skip it; do not create parents there.
+        if not _under(root, mv.src) or not _under(root, mv.dst):
+            continue
         if not mv.src.is_file():  # deleted or moved away since planning; nothing to do
             continue
         if mv.dst.exists():  # something appeared since planning; skip instead of clobbering
@@ -54,12 +58,28 @@ class UndoError(ValueError):
 
 
 def _under(root: Path, path: Path) -> bool:
-    """True if path resolves to something inside root (or root itself)."""
+    """True if path stays inside root and does not pass through a symlink.
+
+    rename follows a directory symlink, so a category named Notes that points
+    elsewhere would move the file out of the folder. A symlink loop used to
+    raise RuntimeError from resolve(); that is a refusal too.
+    """
     try:
         path.resolve().relative_to(root.resolve())
-        return True
-    except ValueError:
+        lexical = path.relative_to(root)
+    except (ValueError, OSError, RuntimeError):
         return False
+    if ".." in lexical.parts:
+        return False
+    current = root
+    for part in lexical.parts:
+        current = current / part
+        try:
+            if current.is_symlink():
+                return False
+        except OSError:
+            return False
+    return True
 
 
 def undo(root: Path) -> tuple[int, int, Path | None]:
@@ -137,19 +157,41 @@ def load_plan(root: Path, current: list[Path], model: str) -> list[Move] | None:
         return None
     try:
         data = json.loads(path.read_text())
-    except ValueError:
+    except (ValueError, OSError):
         return None
-    if data.get("model") != model:
+    # Anything we cannot prove is a safe in-folder plan of these exact files
+    # is ignored, so --apply builds a fresh plan instead of crashing or
+    # replaying a destination outside the folder.
+    if not isinstance(data, dict) or data.get("model") != model:
         return None
     entries = data.get("moves", [])
-    if sorted(e["from"] for e in entries) != sorted(str(p.relative_to(root)) for p in current):
+    if not isinstance(entries, list):
+        return None
+    try:
+        froms = [e["from"] for e in entries]
+    except (TypeError, KeyError, AttributeError):
+        return None
+    if any(not isinstance(item, str) for item in froms):
+        return None
+    if sorted(froms) != sorted(str(p.relative_to(root)) for p in current):
         return None
     moves = []
     for e in entries:
-        src, dst = root / e["from"], root / e["to"]
-        if not src.is_file() or _fingerprint(src) != e["fp"] or dst.exists():
+        if not isinstance(e, dict):
             return None
-        moves.append(Move(src, dst, e["source"], 0.0))
+        dst_rel, source = e.get("to"), e.get("source")
+        if not isinstance(dst_rel, str) or not isinstance(source, str):
+            return None
+        try:
+            src, dst = root / e["from"], root / dst_rel
+            if not _under(root, src) or not _under(root, dst):
+                return None
+            unchanged = src.is_file() and _fingerprint(src) == e.get("fp") and not dst.exists()
+        except (ValueError, OSError):
+            return None
+        if not unchanged:
+            return None
+        moves.append(Move(src, dst, source, 0.0))
     return moves
 
 
