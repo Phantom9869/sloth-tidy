@@ -31,19 +31,45 @@ def slugify(text: str) -> str:
     return text
 
 
+def _real_dir_slot(root: Path, folder: Path) -> bool:
+    """True if folder is inside root and is a real directory, or does not exist yet."""
+    if folder.is_symlink() or (folder.exists() and not folder.is_dir()):
+        return False
+    try:
+        folder.resolve().relative_to(root.resolve())
+    except (ValueError, OSError, RuntimeError):
+        return False
+    return True
+
+
+def _category_dir(root: Path, category: str) -> Path:
+    """Where files of this category go.
+
+    rename follows a directory symlink, and mkdir cannot turn a file into a
+    directory. Notes-2, Notes-3, ... keep the file inside the tidy folder,
+    same idea as collision suffixes on filenames.
+    """
+    n = 1
+    while True:
+        folder = root / (category if n == 1 else f"{category}-{n}")
+        if _real_dir_slot(root, folder):
+            return folder
+        n += 1
+
+
 def target_for(src: Path, root: Path, sug: Suggestion, taken: set[Path]) -> Path:
     category = sug.category if sug.category in CATEGORIES else "Misc"
     stem = slugify(sug.stem) if sug.stem else ""
     if not stem:
         stem = src.stem  # keep the original name rather than invent a bad one
     suffix = src.suffix.lower()
-    folder = root / category
+    folder = _category_dir(root, category)
     candidate = folder / f"{stem}{suffix}"
     n = 2
     # never overwrite: neither something already on disk nor something planned earlier
     while candidate.exists() or candidate in taken:
         candidate = folder / f"{stem}-{n}{suffix}"
         n += 1
-    # belt and braces: the result must live inside root/category
+    # belt and braces: the result must live inside the chosen folder
     assert candidate.resolve().parent == folder.resolve()
     return candidate

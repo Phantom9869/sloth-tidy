@@ -37,10 +37,16 @@ Real output from `demo/demo-output.txt` (Gemma 3 4B on CPU through Ollama).
   and `--apply` reuses it if no file changed, so the plan you read is the plan that runs.
 - **Undo.** Every applied run writes `.sloth-tidy/undo-*.json`; `sloth-tidy undo DIR`
   puts everything back and removes category folders it emptied. A damaged or
-  path-escaping undo log is refused instead of crashing or writing outside the folder.
+  path-escaping undo log is refused instead of crashing or writing outside the folder,
+  including an entry whose path is not text or points at the folder itself.
 - **Never overwrites.** Name collisions become `name-2.ext`, `name-3.ext`. If a destination
   appears between planning and moving, that file is skipped. So is a file you deleted or
-  moved in the meantime; everything else still moves and still gets an undo log.
+  moved in the meantime. If a category folder can't be created because that name is already
+  a file, that one move is skipped too; everything else still moves and still gets an undo log.
+- **Stays inside the folder.** A category name that is a symlink or a file is not used;
+  those files go to `Notes-2`, `Images-2`, and so on. A move that would resolve outside
+  the folder is skipped. A remembered plan that is damaged or points outside is ignored
+  and planned again.
 - **Localhost only.** The Ollama URL must resolve to a loopback address, otherwise the
   CLI refuses to start. File contents never leave the machine.
 - **Doesn't guess blind.** Files it can't read (images, archives, installers) are sorted by
@@ -76,7 +82,8 @@ sloth-tidy ~/Downloads --watch --apply     # every 5 min, tidy files untouched f
 
 Each line of the plan is tagged `[ai ]` (the model read it) or `[ext]` (extension rule),
 with the seconds the model took. `--every` must be greater than 0; a negative `--min-age`
-is refused (it would match no files).
+is refused (it would match no files). A file whose timestamp is in the future is still
+tidied, so a wrong clock does not hide it until the clock catches up.
 
 ## Try the demo
 
@@ -103,8 +110,10 @@ The model is mocked in tests, so they run in well under a second without Ollama.
    Ollama's `/api/chat` with a JSON schema in `format`, so the reply is always
    `{"category": ..., "name": ...}` with the category from a fixed list.
    Answers are validated; anything odd falls back to extension rules.
-3. `planner.py` slugifies the name (max 6 words / 60 chars) and resolves collisions.
-4. `mover.py` moves files with `os.rename` and writes the undo log.
+3. `planner.py` slugifies the name (max 6 words / 60 chars), resolves collisions, and
+   picks a real directory inside the folder when the category name is a symlink or a file.
+4. `mover.py` moves files with `os.rename` and writes the undo log. A path that would
+   leave the folder is skipped. A damaged or escaping remembered plan is ignored.
 
 ## License
 

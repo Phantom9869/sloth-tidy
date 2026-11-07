@@ -95,7 +95,11 @@ def scan(folder: Path, min_age: float = 0.0, now: float | None = None) -> list[F
             st = entry.stat()
         except FileNotFoundError:
             continue  # gone since listing, e.g. a download renamed on completion
-        if now - st.st_mtime < min_age:
+        age = now - st.st_mtime
+        if age >= 0 and age < min_age:
             continue  # still "fresh"; the sloth waits
+        # A timestamp in the future is not a file that is still settling.
+        # Treating it as fresh would hide it until the clock catches up,
+        # including when min_age is 0.
         found.append(FileInfo(entry, st.st_size, st.st_mtime, snippet_for(entry)))
     return found
