@@ -69,7 +69,10 @@ def _under(root: Path, path: Path) -> bool:
         lexical = path.relative_to(root)
     except (ValueError, OSError, RuntimeError):
         return False
-    if ".." in lexical.parts:
+    # Empty parts means the path is root itself ("" or "."). Renaming the
+    # tidy folder is not an undo. ".." is an escape even if a later resolve
+    # would land back inside.
+    if not lexical.parts or ".." in lexical.parts:
         return False
     current = root
     for part in lexical.parts:
@@ -103,9 +106,17 @@ def undo(root: Path) -> tuple[int, int, Path | None]:
     # must not rename files onto the parent directory, /etc, ...).
     planned: list[tuple[Path, Path]] = []
     for entry in entries:
-        if not isinstance(entry, dict) or "from" not in entry or "to" not in entry:
+        if not isinstance(entry, dict):
             raise UndoError(f"undo log is malformed: {log.name}")
-        src, dst = root / entry["from"], root / entry["to"]
+        # JSON null, a number, or a list is still corrupt. Joining those onto
+        # root raises TypeError, which the CLI does not turn into "Can't undo".
+        src_rel, dst_rel = entry.get("from"), entry.get("to")
+        if not isinstance(src_rel, str) or not isinstance(dst_rel, str):
+            raise UndoError(f"undo log is malformed: {log.name}")
+        try:
+            src, dst = root / src_rel, root / dst_rel
+        except (TypeError, ValueError) as exc:
+            raise UndoError(f"undo log is malformed: {log.name}") from exc
         if not _under(root, src) or not _under(root, dst):
             raise UndoError(f"undo log points outside the folder: {log.name}")
         planned.append((src, dst))

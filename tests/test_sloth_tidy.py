@@ -465,6 +465,62 @@ def test_malformed_plan_is_rebuilt(tmp_path, payload):
     assert (tmp_path / "Notes" / "a.txt").read_text() == "hello"
 
 
+@pytest.mark.parametrize("entry", [
+    {"from": None, "to": "Notes/ok.txt"},
+    {"from": "ok.txt", "to": None},
+    {"from": 1, "to": "Notes/ok.txt"},
+    {"from": ["ok.txt"], "to": "Notes/ok.txt"},
+    {"to": "Notes/ok.txt"},
+])
+def test_undo_refuses_non_string_paths_without_moving(tmp_path, entry):
+    # A null or numeric path used to raise TypeError. The good entry in front
+    # of it must not be applied before the log is refused.
+    (tmp_path / "Notes").mkdir()
+    (tmp_path / "Notes" / "ok.txt").write_text("ok")
+    state = tmp_path / ".sloth-tidy"
+    state.mkdir()
+    bad = state / "undo-20260101-000000-000010.json"
+    bad.write_text(json.dumps({"moves": [
+        {"from": "ok.txt", "to": "Notes/ok.txt"},
+        entry,
+    ]}))
+    with pytest.raises(UndoError, match="malformed"):
+        undo(tmp_path)
+    assert (tmp_path / "Notes" / "ok.txt").read_text() == "ok"
+    assert not (tmp_path / "ok.txt").exists()
+    assert bad.is_file()
+
+
+@pytest.mark.parametrize("paths", [("", "restored.txt"), (".", "restored.txt"),
+                                   ("Notes/a.txt", ""), ("Notes/a.txt", ".")])
+def test_undo_refuses_path_that_is_the_folder_itself(tmp_path, paths):
+    # "" and "." are the tidy folder. Undo must not rename the folder.
+    src_rel, dst_rel = paths
+    (tmp_path / "Notes").mkdir()
+    (tmp_path / "Notes" / "a.txt").write_text("inside")
+    state = tmp_path / ".sloth-tidy"
+    state.mkdir()
+    bad = state / "undo-20260101-000000-000011.json"
+    bad.write_text(json.dumps({"moves": [{"from": src_rel, "to": dst_rel}]}))
+    with pytest.raises(UndoError, match="outside"):
+        undo(tmp_path)
+    assert (tmp_path / "Notes" / "a.txt").read_text() == "inside"
+    assert tmp_path.is_dir()
+    assert bad.is_file()
+
+
+def test_undo_cli_reports_non_string_path(tmp_path, capsys):
+    state = tmp_path / ".sloth-tidy"
+    state.mkdir()
+    (state / "undo-20260101-000000-000012.json").write_text(
+        json.dumps({"moves": [{"from": None, "to": "a.txt"}]}))
+    assert main(["undo", str(tmp_path)]) == 1
+    captured = capsys.readouterr()
+    assert "Can't undo" in captured.out
+    assert "Traceback" not in captured.out
+    assert "Traceback" not in captured.err
+
+
 def test_undo_refuses_symlink_loop_without_crashing(tmp_path):
     (tmp_path / "loop").symlink_to(tmp_path / "loop")
     state = tmp_path / ".sloth-tidy"
