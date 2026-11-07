@@ -82,7 +82,8 @@ sloth-tidy ~/Downloads --watch --apply     # every 5 min, tidy files untouched f
 
 Each line of the plan is tagged `[ai ]` (the model read it) or `[ext]` (extension rule),
 with the seconds the model took. `--every` must be greater than 0; a negative `--min-age`
-is refused (it would match no files).
+is refused (it would match no files). A file whose timestamp is in the future is still
+tidied, so a wrong clock does not hide it until the clock catches up.
 
 ## Try the demo
 

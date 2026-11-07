@@ -49,6 +49,31 @@ def test_scan_min_age_leaves_fresh_files(messy):
     assert len(scan(messy, min_age=3600, now=time.time() + 7200)) == 3
 
 
+def test_scan_includes_files_dated_in_the_future(tmp_path):
+    # A future mtime used to fail `now - mtime < min_age` for every min_age,
+    # including 0, so the file was skipped until the clock caught up.
+    now = 1_700_000_000.0
+    future, fresh, settled = (tmp_path / name for name in ("future.txt", "fresh.txt", "settled.txt"))
+    for path in (future, fresh, settled):
+        path.write_text(path.stem)
+    os.utime(future, (now + 86400, now + 86400))
+    os.utime(fresh, (now - 30, now - 30))
+    os.utime(settled, (now - 7200, now - 7200))
+    assert [f.path.name for f in scan(tmp_path, min_age=3600, now=now)] == ["future.txt", "settled.txt"]
+    assert [f.path.name for f in scan(tmp_path, min_age=0, now=now)] == [
+        "fresh.txt", "future.txt", "settled.txt",
+    ]
+
+
+def test_future_dated_file_is_tidied(tmp_path):
+    f = tmp_path / "a.txt"
+    f.write_text("hello")
+    later = time.time() + 86400
+    os.utime(f, (later, later))
+    assert main([str(tmp_path), "--apply", "--no-model"]) == 0
+    assert (tmp_path / "Notes" / "a.txt").read_text() == "hello"
+
+
 def test_snippet_reads_text(messy):
     info = {f.path.name: f for f in scan(messy)}
     assert "Invoice #4471" in info["doc (3).txt"].snippet
