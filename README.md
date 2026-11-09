@@ -39,6 +39,9 @@ Real output from `demo/demo-output.txt` (Gemma 3 4B on CPU through Ollama).
   puts everything back and removes category folders it emptied. A damaged or
   path-escaping undo log is refused instead of crashing or writing outside the folder,
   including an entry whose path is not text or points at the folder itself.
+  A tidied file later replaced by a symlink does not block undo of the others;
+  the link is moved back and its target is left alone. A symlink used as a
+  directory on the way is still refused.
 - **Never overwrites.** Name collisions become `name-2.ext`, `name-3.ext`. If a destination
   appears between planning and moving, that file is skipped. So is a file you deleted or
   moved in the meantime. If a category folder can't be created because that name is already

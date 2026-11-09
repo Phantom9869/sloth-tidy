@@ -58,16 +58,17 @@ class UndoError(ValueError):
 
 
 def _under(root: Path, path: Path) -> bool:
-    """True if path stays inside root and does not pass through a symlink.
+    """True if path stays inside root and does not pass through a directory symlink.
 
     rename follows a directory symlink, so a category named Notes that points
-    elsewhere would move the file out of the folder. A symlink loop used to
-    raise RuntimeError from resolve(); that is a refusal too.
+    elsewhere would move the file out of the folder. The last component is
+    allowed to be a symlink: rename moves that link and does not follow it.
+    Resolving the whole path would follow the link and refuse undo of every
+    other file in the log. A symlink loop used to raise RuntimeError here.
     """
     try:
-        path.resolve().relative_to(root.resolve())
         lexical = path.relative_to(root)
-    except (ValueError, OSError, RuntimeError):
+    except ValueError:
         return False
     # Empty parts means the path is root itself ("" or "."). Renaming the
     # tidy folder is not an undo. ".." is an escape even if a later resolve
@@ -75,12 +76,13 @@ def _under(root: Path, path: Path) -> bool:
     if not lexical.parts or ".." in lexical.parts:
         return False
     current = root
-    for part in lexical.parts:
+    for part in lexical.parts[:-1]:
         current = current / part
         try:
             if current.is_symlink():
                 return False
-        except OSError:
+            current.resolve().relative_to(root.resolve())
+        except (ValueError, OSError, RuntimeError):
             return False
     return True
 
