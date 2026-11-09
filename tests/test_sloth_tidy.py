@@ -546,6 +546,65 @@ def test_undo_cli_reports_non_string_path(tmp_path, capsys):
     assert "Traceback" not in captured.err
 
 
+def test_undo_restores_siblings_when_one_file_was_replaced_by_a_symlink(tmp_path):
+    # resolve() follows the link, so this used to look like the whole log
+    # escaped and nothing was put back.
+    outside = tmp_path.parent / f"outside-{tmp_path.name}"
+    outside.mkdir()
+    secret = outside / "secret"
+    secret.write_text("leave me")
+    try:
+        (tmp_path / "a.txt").write_text("aaa")
+        (tmp_path / "b.txt").write_text("bbb")
+        log = apply(tmp_path, [
+            Move(tmp_path / "a.txt", tmp_path / "Notes" / "a.txt", "fallback"),
+            Move(tmp_path / "b.txt", tmp_path / "Code" / "b.txt", "fallback"),
+        ])
+        assert log is not None
+        replaced = tmp_path / "Notes" / "a.txt"
+        replaced.unlink()
+        replaced.symlink_to(secret)
+        restored, skipped, _ = undo(tmp_path)
+        assert (restored, skipped) == (2, 0)
+        assert (tmp_path / "b.txt").read_text() == "bbb"
+        assert (tmp_path / "a.txt").is_symlink()
+        assert (tmp_path / "a.txt").resolve() == secret.resolve()
+        assert secret.read_text() == "leave me"
+        assert not (tmp_path / "Notes").exists()
+        assert not (tmp_path / "Code").exists()
+    finally:
+        if secret.exists() or secret.is_symlink():
+            secret.unlink()
+        outside.rmdir()
+
+
+def test_undo_still_refuses_a_symlinked_directory(tmp_path):
+    outside = tmp_path.parent / f"outside-{tmp_path.name}"
+    outside.mkdir()
+    (outside / "x.txt").write_text("outside")
+    try:
+        (tmp_path / "Code").mkdir()
+        (tmp_path / "Code" / "c.txt").write_text("ccc")
+        (tmp_path / "Notes").symlink_to(outside)
+        state = tmp_path / ".sloth-tidy"
+        state.mkdir()
+        bad = state / "undo-20260101-000000-000088.json"
+        bad.write_text(json.dumps({"moves": [
+            {"from": "c.txt", "to": "Code/c.txt"},
+            {"from": "x.txt", "to": "Notes/x.txt"},
+        ]}))
+        with pytest.raises(UndoError, match="outside"):
+            undo(tmp_path)
+        assert (tmp_path / "Code" / "c.txt").read_text() == "ccc"
+        assert not (tmp_path / "c.txt").exists()
+        assert (outside / "x.txt").read_text() == "outside"
+        assert bad.is_file()
+    finally:
+        for child in outside.iterdir():
+            child.unlink()
+        outside.rmdir()
+
+
 def test_undo_refuses_symlink_loop_without_crashing(tmp_path):
     (tmp_path / "loop").symlink_to(tmp_path / "loop")
     state = tmp_path / ".sloth-tidy"
