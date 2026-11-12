@@ -43,8 +43,9 @@ Real output from `demo/demo-output.txt` (Gemma 3 4B on CPU through Ollama).
   the link is moved back and its target is left alone. A symlink used as a
   directory on the way is still refused.
 - **Never overwrites.** Name collisions become `name-2.ext`, `name-3.ext`. If a destination
-  appears between planning and moving, that file is skipped. So is a file you deleted or
-  moved in the meantime. If a category folder can't be created because that name is already
+  appears between planning and moving, that file is skipped, including a broken symlink
+  at the destination. So is a file you deleted, moved, or replaced with a symlink in the
+  meantime. If a category folder can't be created because that name is already
   a file, that one move is skipped too; everything else still moves and still gets an undo log.
 - **Stays inside the folder.** A category name that is a symlink or a file is not used;
   those files go to `Notes-2`, `Images-2`, and so on. A move that would resolve outside

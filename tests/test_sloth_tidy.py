@@ -143,6 +143,33 @@ def test_apply_skips_if_destination_appears_after_planning(tmp_path):
     assert (tmp_path / "Notes" / "x.txt").read_text() == "someone else's"
 
 
+def test_apply_skips_source_replaced_by_a_symlink(tmp_path):
+    # A file swapped for a symlink after planning used to be moved, because
+    # Path.is_file() follows the link. Scanner leaves symlinks alone; apply should too.
+    (tmp_path / "a.txt").write_text("aaa")
+    (tmp_path / "b.txt").write_text("bbb")
+    moves = build_plan(tmp_path, FakeBrain({"a.txt": ("Notes", "a"), "b.txt": ("Notes", "b")}))
+    (tmp_path / "a.txt").unlink()
+    (tmp_path / "a.txt").symlink_to(tmp_path / "b.txt")
+    log = apply(tmp_path, moves)
+    assert log is not None
+    assert [m["from"] for m in json.loads(log.read_text())["moves"]] == ["b.txt"]
+    assert (tmp_path / "a.txt").is_symlink()
+    assert not (tmp_path / "Notes" / "a.txt").exists()
+    assert (tmp_path / "Notes" / "b.txt").read_text() == "bbb"
+
+
+def test_apply_skips_if_destination_is_a_broken_symlink(tmp_path):
+    # exists() is False for a dangling symlink, so rename used to replace it.
+    (tmp_path / "a.txt").write_text("mine")
+    moves = build_plan(tmp_path, FakeBrain({"a.txt": ("Notes", "x")}))
+    (tmp_path / "Notes").mkdir()
+    (tmp_path / "Notes" / "x.txt").symlink_to(tmp_path / "missing-target")
+    assert apply(tmp_path, moves) is None
+    assert (tmp_path / "a.txt").read_text() == "mine"
+    assert (tmp_path / "Notes" / "x.txt").is_symlink()
+
+
 def test_apply_keeps_undo_log_when_category_dir_is_blocked(tmp_path):
     # "Images" is a file, so creating Images/ fails. That must not discard the
     # undo log for a.txt, which was already renamed, or skip c.txt afterwards.

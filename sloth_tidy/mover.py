@@ -24,9 +24,13 @@ def apply(root: Path, moves: list[Move]) -> Path | None:
         # rename the file out of the folder. Skip it; do not create parents there.
         if not _under(root, mv.src) or not _under(root, mv.dst):
             continue
-        if not mv.src.is_file():  # deleted or moved away since planning; nothing to do
+        # is_file() follows a symlink, so a file replaced by a link after
+        # planning would otherwise be renamed. Scanner leaves symlinks alone;
+        # apply should too. A broken symlink at the destination also counts
+        # as something already there (exists() is False for those).
+        if mv.src.is_symlink() or not mv.src.is_file():
             continue
-        if mv.dst.exists():  # something appeared since planning; skip instead of clobbering
+        if mv.dst.exists() or mv.dst.is_symlink():
             continue
         try:
             # mkdir is in here too: if the category name is already a file,
