@@ -375,9 +375,25 @@ def test_cli_rejects_non_positive_every(tmp_path):
         main([str(tmp_path), "--watch", "--every", "-1", "--no-model"])
 
 
+def test_cli_rejects_non_finite_every(tmp_path):
+    # nan <= 0 is False, so --every nan used to reach time.sleep(nan).
+    # inf would sleep forever.
+    for value in ("nan", "inf", "-inf"):
+        with pytest.raises(SystemExit):
+            main([str(tmp_path), "--watch", "--every", value, "--no-model"])
+
+
 def test_cli_rejects_negative_min_age(tmp_path):
     with pytest.raises(SystemExit):
         main([str(tmp_path), "--min-age", "-5", "--no-model"])
+
+
+def test_cli_rejects_non_finite_min_age(tmp_path):
+    # nan < 0 is False, so --min-age nan used to skip the freshness check
+    # and tidy every file, including ones that had just landed.
+    for value in ("nan", "inf", "-inf"):
+        with pytest.raises(SystemExit):
+            main([str(tmp_path), "--min-age", value, "--no-model"])
 
 
 def test_symlinked_category_is_not_followed(tmp_path):

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 import time
 from pathlib import Path
@@ -118,10 +119,10 @@ def main(argv: list[str] | None = None) -> int:
     root = a.folder.expanduser().resolve()
     if not root.is_dir():
         p.error(f"{root} is not a folder")
-    if a.every <= 0:
-        p.error("--every must be greater than 0")
-    if a.min_age is not None and a.min_age < 0:
-        p.error("--min-age cannot be negative")
+    if not math.isfinite(a.every) or a.every <= 0:
+        p.error("--every must be a finite number greater than 0")
+    if a.min_age is not None and (not math.isfinite(a.min_age) or a.min_age < 0):
+        p.error("--min-age cannot be negative or non-finite")
     try:
         brain = pick_brain(a)
     except LocalOnlyError as exc:
