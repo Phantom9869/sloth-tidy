@@ -75,8 +75,11 @@ def snippet_for(path: Path) -> str:
 
 def is_candidate(path: Path) -> bool:
     name = path.name
-    if not path.is_file() or path.is_symlink():
-        return False
+    try:
+        if not path.is_file() or path.is_symlink():
+            return False
+    except OSError:
+        return False  # unreadable entry: skip it rather than abort the scan
     if name.startswith("."):
         return False
     if path.suffix.lower() in PARTIAL_SUFFIXES:
@@ -93,8 +96,8 @@ def scan(folder: Path, min_age: float = 0.0, now: float | None = None) -> list[F
             continue
         try:
             st = entry.stat()
-        except FileNotFoundError:
-            continue  # gone since listing, e.g. a download renamed on completion
+        except OSError:
+            continue  # gone since listing, or not readable
         age = now - st.st_mtime
         if age >= 0 and age < min_age:
             continue  # still "fresh"; the sloth waits

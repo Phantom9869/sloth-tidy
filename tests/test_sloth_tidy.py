@@ -347,6 +347,25 @@ def test_scan_skips_file_that_vanishes_mid_scan(tmp_path, monkeypatch):
     assert [f.path.name for f in found] == ["keep.txt"]
 
 
+def test_scan_skips_an_unreadable_file(tmp_path, monkeypatch):
+    # A file the process cannot stat used to abort the whole scan.
+    from sloth_tidy import scanner
+    from pathlib import Path
+
+    (tmp_path / "keep.txt").write_text("hello")
+    (tmp_path / "secret.txt").write_text("nope")
+    real_is_file = Path.is_file
+
+    def deny_secret(self, *args, **kwargs):
+        if self.name == "secret.txt":
+            raise PermissionError("Permission denied")
+        return real_is_file(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "is_file", deny_secret)
+    found = scanner.scan(tmp_path)
+    assert [f.path.name for f in found] == ["keep.txt"]
+
+
 def test_undo_refuses_corrupt_log(tmp_path):
     # A half-written or hand-edited undo log used to raise JSONDecodeError.
     state = tmp_path / ".sloth-tidy"
